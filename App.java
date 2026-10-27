@@ -1,7 +1,10 @@
 import com.sun.net.httpserver.HttpServer;
+import java.io.IOException; // ファイルの読み書きで発生する例外を扱う。
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files; // 標準APIでファイルを読み書きする。
+import java.nio.file.Path; // 保存先のファイルパスを扱う。
 import java.util.ArrayList;
 import java.util.List;
 
@@ -9,12 +12,34 @@ public class App {
     static List<Todo> todos = new ArrayList<>();
     static int nextId = 1;
 
+    static void save() throws IOException { // Todo全件をファイルへ保存する。
+        List<String> lines = new ArrayList<>(); // 書き出す行を用意する。
+        for (Todo todo : todos) { // Todo全件を順番に処理する。
+            lines.add(todo.getId() + "," + (todo.isDone() ? "1" : "0") + "," + todo.getTitle()); // ID・完了状態・タイトルを1行にまとめる。
+        } // 行の作成を終える。
+        Files.write(Path.of("todos.csv"), lines, StandardCharsets.UTF_8); // UTF-8で全件を上書きし、0件なら空にする。
+    } // 保存処理を終える。
+
+    static void load() throws IOException { // 保存済みのTodoを読み込む。
+        todos.clear(); // 復元前にListを空にする。
+        nextId = 1; // 保存データが空なら次のIDを1にする。
+        Path path = Path.of("todos.csv"); // 読み込むファイルを指定する。
+        if (!Files.exists(path)) { // 保存ファイルがなければ空のままにする。
+            return; // 読み込みを終える。
+        } // 存在確認を終える。
+        for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) { // UTF-8で読み込んだ各行を処理する。
+            String[] parts = line.split(",", 3); // 先頭の2つのカンマで分け、タイトル内のカンマを残す。
+            int id = Integer.parseInt(parts[0]); // IDを数値に戻す。
+            Todo todo = new Todo(id, parts[2]); // 保存されたIDとタイトルでTodoを作る。
+            todo.setDone(parts[1].equals("1")); // 1なら完了、0なら未完了に戻す。
+            todos.add(todo); // 復元したTodoをListへ戻す。
+            nextId = Math.max(nextId, id + 1); // 最大IDの次を新規追加用のIDにする。
+        } // 全件の復元を終える。
+    } // 読み込み処理を終える。
+
     public static void main(String[] args) throws Exception {
+        load(); // サーバーを作る前に保存済みのTodoを復元する。
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
-        todos.add(new Todo(nextId++, "牛乳を買う"));
-        Todo egg = new Todo(nextId++, "卵を買う");
-        egg.setDone(true);
-        todos.add(egg);
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             String method = exchange.getRequestMethod();
@@ -27,6 +52,7 @@ public class App {
                 if (!title.isEmpty()) {
                     todos.add(new Todo(nextId, title));
                     nextId++;
+                    save(); // 追加後の全件を保存する。
                 }
                 exchange.getResponseHeaders().set("Location", "/");
                 exchange.sendResponseHeaders(303, -1);
@@ -40,6 +66,7 @@ public class App {
                         for (Todo todo : todos) {
                             if (todo.getId() == id) {
                                 todo.setDone(true);
+                                save(); // 完了状態を変更した全件を保存する。
                                 break;
                             }
                         }
@@ -55,7 +82,9 @@ public class App {
                 if (query != null && query.startsWith("id=") && query.length() > 3) {
                     try {
                         int id = Integer.parseInt(query.substring(3));
-                        todos.removeIf(todo -> todo.getId() == id);
+                        if (todos.removeIf(todo -> todo.getId() == id)) { // 対象のTodoが削除されたか確認する。
+                            save(); // 削除後の全件を保存する。
+                        } // 削除時の保存を終える。
                     } catch (NumberFormatException e) {
                     }
                 }
