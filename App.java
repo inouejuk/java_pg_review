@@ -32,6 +32,37 @@ public class App { // Appという名前でプログラム全体をまとめる
                 exchange.sendResponseHeaders(303, -1); // 303（別の場所へ移動する合図）を本文なしで返す
                 exchange.close(); // 今回のやり取りを閉じる
                 return; // 今回のアクセスの処理をここで終える
+            } else if (path.equals("/done") && method.equals("GET")) { // ★追加 「/done」へのGET（ページを開く送信方法）なら完了にする
+                String query = exchange.getRequestURI().getQuery(); // ★追加 クエリ（URLの「?」より後ろの部分）を受け取る
+                if (query != null && query.startsWith("id=") && query.length() > 3) { // ★追加 「id=」の後ろに文字があるときだけ進む
+                    try { // ★追加 受け取った文字を数字に変える処理を試す
+                        int id = Integer.parseInt(query.substring(3)); // ★追加 先頭の「id=」の3文字を除き、残りを番号に変える
+                        for (Todo todo : todos) { // ★追加 一覧のTodoを1件ずつ取り出す
+                            if (todo.getId() == id) { // ★追加 受け取った番号とTodoの番号が一致したら進む
+                                todo.setDone(true); // ★追加 一致したTodoを完了にする
+                                break; // ★追加 一致した1件を処理したら、繰り返しを抜ける
+                            } // ★追加 番号が一致したときの処理はここまで
+                        } // ★追加 一覧の繰り返しはここまで
+                    } catch (NumberFormatException e) { // ★追加 数字に変えられなかったときは何もしない
+                    } // ★追加 数字への変換を試す処理はここまで
+                } // ★追加 idがあるときの処理はここまで
+                exchange.getResponseHeaders().set("Location", "/"); // ★追加 ブラウザの移動先を「/」にする
+                exchange.sendResponseHeaders(303, -1); // ★追加 303（別の場所へ移動する合図）を本文なしで返す
+                exchange.close(); // ★追加 今回のやり取りを閉じる
+                return; // ★追加 今回のアクセスの処理をここで終える
+            } else if (path.equals("/delete") && method.equals("GET")) { // ★追加 「/delete」へのGET（ページを開く送信方法）なら削除する
+                String query = exchange.getRequestURI().getQuery(); // ★追加 クエリ（URLの「?」より後ろの部分）を受け取る
+                if (query != null && query.startsWith("id=") && query.length() > 3) { // ★追加 「id=」の後ろに文字があるときだけ進む
+                    try { // ★追加 受け取った文字を数字に変える処理を試す
+                        int id = Integer.parseInt(query.substring(3)); // ★追加 先頭の「id=」の3文字を除き、残りを番号に変える
+                        todos.removeIf(todo -> todo.getId() == id); // ★追加 番号が一致するTodoを一覧から取り除く
+                    } catch (NumberFormatException e) { // ★追加 数字に変えられなかったときは何もしない
+                    } // ★追加 数字への変換を試す処理はここまで
+                } // ★追加 idがあるときの処理はここまで
+                exchange.getResponseHeaders().set("Location", "/"); // ★追加 ブラウザの移動先を「/」にする
+                exchange.sendResponseHeaders(303, -1); // ★追加 303（別の場所へ移動する合図）を本文なしで返す
+                exchange.close(); // ★追加 今回のやり取りを閉じる
+                return; // ★追加 今回のアクセスの処理をここで終える
             } else if (path.equals("/")) { // 「/」なら入力フォームとTodoの一覧を表示する
                 String html = "<form method='post' action='/add'><input name='todo'><button>追加</button></form><ul>"; // ★変更 入力フォームと一覧の始まりをhtml（画面の内容）に入れる
                 for (Todo todo : todos) { // ★変更 一覧からTodoを1件ずつ取り出す
@@ -39,7 +70,7 @@ public class App { // Appという名前でプログラム全体をまとめる
                     if (todo.isDone()) { // ★変更 このTodoが完了していれば、印を付ける
                         mark = " ✔"; // ★変更 空白と完了の印を入れる
                     } // ★変更 完了しているかどうかの分岐はここまで
-                    html += "<li>" + todo.getTitle() + mark + "</li>"; // ★変更 やることと印をHTML（画面の構造を書く形式）の一覧項目として足す
+                    html += "<li>" + todo.getTitle() + mark + " <a href='/done?id=" + todo.getId() + "'>完了</a> <a href='/delete?id=" + todo.getId() + "'>削除</a></li>"; // ★追加 やることと印の横に、番号入りの完了・削除リンク（クリックできる文字）を付ける
                 } // 一覧の繰り返しはここまで
                 html += "</ul>"; // ★変更 一覧を閉じる
                 message = html; // ★変更 作った画面の内容を、ブラウザへ返す文字にする
