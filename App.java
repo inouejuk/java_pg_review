@@ -1,117 +1,128 @@
-import com.sun.net.httpserver.HttpServer; // Javaに付属するWebサーバー（ブラウザに応答する仕組み）を使う
-import java.net.InetSocketAddress; // 接続を待ち受ける番号を指定するための部品を使う
-import java.net.URLDecoder; // フォームの送信で変換された日本語などを元に戻す部品を使う
-import java.nio.charset.StandardCharsets; // UTF-8（日本語も扱える文字の表し方）を指定する部品を使う
-import java.util.ArrayList; // 要素を追加できる一覧を作る部品を使う
-import java.util.List; // List（データを順番にためる入れ物）を使う
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
-public class App { // Appという名前でプログラム全体をまとめる
-    static List<Todo> todos = new ArrayList<>(); // ★変更 Todo（番号・やること・完了状態をまとめたデータ）をためる一覧を、起動処理の外に置く
-    static int nextId = 1; // ★変更 次のTodoに付ける番号を1から始める
+public class App {
+    static List<Todo> todos = new ArrayList<>();
+    static int nextId = 1;
 
-    public static void main(String[] args) throws Exception { // 起動時の処理を書き、エラーが起きたらそのまま知らせる
-        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0); // 8080番のポート（接続の窓口）で待ち受けるサーバーを用意する
-        todos.add(new Todo(nextId++, "牛乳を買う")); // ★変更 1番のサンプルを作って追加し、次の番号を1増やす
-        Todo egg = new Todo(nextId++, "卵を買う"); // ★変更 2番のサンプルをeggという変数（名前付きの入れ物）に入れ、次の番号を1増やす
-        egg.setDone(true); // ★変更 卵を買うTodoを完了にする
-        todos.add(egg); // ★変更 完了にした卵のTodoを一覧に追加する
-        server.createContext("/", exchange -> { // 「/」へのアクセスを受けたときの処理をここに直接書く
-            String path = exchange.getRequestURI().getPath(); // ★変更 アクセスされたパス（URLの「/add」などの部分）を取り出す
-            String method = exchange.getRequestMethod(); // 送信方法（GETやPOST）を取り出す
-            String message; // 返す文字を入れる変数（名前付きの入れ物）を先に用意する
-            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8"); // 普通の文字として、UTF-8（日本語も扱える文字の表し方）で返すと伝える
-            if (path.equals("/add") && method.equals("POST")) { // 「/add」へのPOST（フォームの内容を送る方法）なら追加する
-                String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8); // 送られた中身をUTF-8の文字として受け取る
-                String value = body.substring(5); // 先頭の「todo=」の5文字を除いた残りを切り出す
-                String title = URLDecoder.decode(value, StandardCharsets.UTF_8); // ★変更 送信用に変換された文字を元に戻し、title（やること）に入れる
-                if (!title.isEmpty()) { // ★変更 入力が空でなければ追加する
-                    todos.add(new Todo(nextId, title)); // ★変更 次の番号と入力したやることでTodoを作り、一覧に追加する
-                    nextId++; // ★変更 次に付ける番号を1増やす
-                } // 空の入力かどうかの分岐はここまで
-                exchange.getResponseHeaders().set("Location", "/"); // ブラウザの移動先を「/」にする
-                exchange.sendResponseHeaders(303, -1); // 303（別の場所へ移動する合図）を本文なしで返す
-                exchange.close(); // 今回のやり取りを閉じる
-                return; // 今回のアクセスの処理をここで終える
-            } else if (path.equals("/done") && method.equals("GET")) { // ★追加 「/done」へのGET（ページを開く送信方法）なら完了にする
-                String query = exchange.getRequestURI().getQuery(); // ★追加 クエリ（URLの「?」より後ろの部分）を受け取る
-                if (query != null && query.startsWith("id=") && query.length() > 3) { // ★追加 「id=」の後ろに文字があるときだけ進む
-                    try { // ★追加 受け取った文字を数字に変える処理を試す
-                        int id = Integer.parseInt(query.substring(3)); // ★追加 先頭の「id=」の3文字を除き、残りを番号に変える
-                        for (Todo todo : todos) { // ★追加 一覧のTodoを1件ずつ取り出す
-                            if (todo.getId() == id) { // ★追加 受け取った番号とTodoの番号が一致したら進む
-                                todo.setDone(true); // ★追加 一致したTodoを完了にする
-                                break; // ★追加 一致した1件を処理したら、繰り返しを抜ける
-                            } // ★追加 番号が一致したときの処理はここまで
-                        } // ★追加 一覧の繰り返しはここまで
-                    } catch (NumberFormatException e) { // ★追加 数字に変えられなかったときは何もしない
-                    } // ★追加 数字への変換を試す処理はここまで
-                } // ★追加 idがあるときの処理はここまで
-                exchange.getResponseHeaders().set("Location", "/"); // ★追加 ブラウザの移動先を「/」にする
-                exchange.sendResponseHeaders(303, -1); // ★追加 303（別の場所へ移動する合図）を本文なしで返す
-                exchange.close(); // ★追加 今回のやり取りを閉じる
-                return; // ★追加 今回のアクセスの処理をここで終える
-            } else if (path.equals("/delete") && method.equals("GET")) { // ★追加 「/delete」へのGET（ページを開く送信方法）なら削除する
-                String query = exchange.getRequestURI().getQuery(); // ★追加 クエリ（URLの「?」より後ろの部分）を受け取る
-                if (query != null && query.startsWith("id=") && query.length() > 3) { // ★追加 「id=」の後ろに文字があるときだけ進む
-                    try { // ★追加 受け取った文字を数字に変える処理を試す
-                        int id = Integer.parseInt(query.substring(3)); // ★追加 先頭の「id=」の3文字を除き、残りを番号に変える
-                        todos.removeIf(todo -> todo.getId() == id); // ★追加 番号が一致するTodoを一覧から取り除く
-                    } catch (NumberFormatException e) { // ★追加 数字に変えられなかったときは何もしない
-                    } // ★追加 数字への変換を試す処理はここまで
-                } // ★追加 idがあるときの処理はここまで
-                exchange.getResponseHeaders().set("Location", "/"); // ★追加 ブラウザの移動先を「/」にする
-                exchange.sendResponseHeaders(303, -1); // ★追加 303（別の場所へ移動する合図）を本文なしで返す
-                exchange.close(); // ★追加 今回のやり取りを閉じる
-                return; // ★追加 今回のアクセスの処理をここで終える
-            } else if (path.equals("/")) { // 「/」なら入力フォームとTodoの一覧を表示する
-                String html = "<form method='post' action='/add'><input name='todo'><button>追加</button></form><ul>"; // ★変更 入力フォームと一覧の始まりをhtml（画面の内容）に入れる
-                for (Todo todo : todos) { // ★変更 一覧からTodoを1件ずつ取り出す
-                    String mark = ""; // ★変更 完了の印は、最初は空の文字にする
-                    if (todo.isDone()) { // ★変更 このTodoが完了していれば、印を付ける
-                        mark = " ✔"; // ★変更 空白と完了の印を入れる
-                    } // ★変更 完了しているかどうかの分岐はここまで
-                    html += "<li>" + todo.getTitle() + mark + " <a href='/done?id=" + todo.getId() + "'>完了</a> <a href='/delete?id=" + todo.getId() + "'>削除</a></li>"; // ★追加 やることと印の横に、番号入りの完了・削除リンク（クリックできる文字）を付ける
-                } // 一覧の繰り返しはここまで
-                html += "</ul>"; // ★変更 一覧を閉じる
-                message = html; // ★変更 作った画面の内容を、ブラウザへ返す文字にする
-                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8"); // この応答はUTF-8のHTMLとして表示すると伝える
-            } else { // ★変更 使わない分岐を削除し、どちらにも当てはまらないパスをここで受ける
+    public static void main(String[] args) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
+        todos.add(new Todo(nextId++, "牛乳を買う"));
+        Todo egg = new Todo(nextId++, "卵を買う");
+        egg.setDone(true);
+        todos.add(egg);
+        server.createContext("/", exchange -> {
+            String path = exchange.getRequestURI().getPath();
+            String method = exchange.getRequestMethod();
+            String message;
+            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=UTF-8");
+            if (path.equals("/add") && method.equals("POST")) {
+                String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                String value = body.substring(5);
+                String title = URLDecoder.decode(value, StandardCharsets.UTF_8);
+                if (!title.isEmpty()) {
+                    todos.add(new Todo(nextId, title));
+                    nextId++;
+                }
+                exchange.getResponseHeaders().set("Location", "/");
+                exchange.sendResponseHeaders(303, -1);
+                exchange.close();
+                return;
+            } else if (path.equals("/done") && method.equals("GET")) {
+                String query = exchange.getRequestURI().getQuery();
+                if (query != null && query.startsWith("id=") && query.length() > 3) {
+                    try {
+                        int id = Integer.parseInt(query.substring(3));
+                        for (Todo todo : todos) {
+                            if (todo.getId() == id) {
+                                todo.setDone(true);
+                                break;
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                    }
+                }
+                exchange.getResponseHeaders().set("Location", "/");
+                exchange.sendResponseHeaders(303, -1);
+                exchange.close();
+                return;
+            } else if (path.equals("/delete") && method.equals("GET")) {
+                String query = exchange.getRequestURI().getQuery();
+                if (query != null && query.startsWith("id=") && query.length() > 3) {
+                    try {
+                        int id = Integer.parseInt(query.substring(3));
+                        todos.removeIf(todo -> todo.getId() == id);
+                    } catch (NumberFormatException e) {
+                    }
+                }
+                exchange.getResponseHeaders().set("Location", "/");
+                exchange.sendResponseHeaders(303, -1);
+                exchange.close();
+                return;
+            } else if (path.equals("/")) {
+                String html = "<!DOCTYPE html><html lang='ja'><head><meta charset='UTF-8'>"
+                        + "<title>わたしのTodo</title>"
+                        + "<style>"
+                        + "body { max-width: 600px; margin: 32px auto; padding: 0 16px; font-size: 16px; }"
+                        + "h1 { font-size: 24px; margin: 0 0 16px; }"
+                        + "form { margin-bottom: 16px; }"
+                        + "</style></head><body><h1>わたしのTodo</h1>"
+                        + "<form method='post' action='/add'><input name='todo'><button>追加</button></form>";
+                if (todos.isEmpty()) {
+                    html += "<p>やることは、いまゼロです</p>";
+                }
+                html += "<ul>";
+                for (Todo todo : todos) {
+                    String mark = "";
+                    if (todo.isDone()) {
+                        mark = " ✔";
+                    }
+                    html += "<li>" + todo.getTitle() + mark + " <a href='/done?id=" + todo.getId() + "'>完了</a> <a href='/delete?id=" + todo.getId() + "'>削除</a></li>";
+                }
+                html += "</ul></body></html>";
+                message = html;
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+            } else {
                 message = "ページが見つかりません";
             }
-            byte[] body = message.getBytes("UTF-8"); // 文字をUTF-8のバイト列（通信で送れる数値の並び）に変える
-            exchange.sendResponseHeaders(200, body.length); // 200（正常に処理できた印）と送るバイト数を伝える
-            exchange.getResponseBody().write(body); // 用意した文字のデータをブラウザに送る
-            exchange.getResponseBody().close(); // 文字のデータを送るための出口を閉じる
+            byte[] body = message.getBytes("UTF-8");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.getResponseBody().close();
         });
-        server.start(); // サーバーを起動してアクセスを待ち始める
-        System.out.println("サーバー起動: http://localhost:8080 （止めるときは Ctrl+C）"); // 起動したことと止め方をターミナル（コマンドを入力する画面）に表示する
+        server.start();
+        System.out.println("サーバー起動: http://localhost:8080 （止めるときは Ctrl+C）");
     }
 }
 
-class Todo { // ★変更 Todo（1件のやることをまとめる設計図）を作る
-    private final int id; // ★変更 番号を保存する。privateはこのクラス内だけ、finalは後から変更できないという意味
-    private final String title; // ★変更 やることの文字を保存し、後から変更できないようにする
-    private boolean done; // ★変更 完了したかを保存する。booleanはtrue（はい）かfalse（いいえ）を表す
+class Todo {
+    private final int id;
+    private final String title;
+    private boolean done;
 
-    Todo(int id, String title) { // ★変更 コンストラクタ（newで作るときに値を受け取る部分）。publicは付けない
-        this.id = id; // ★変更 受け取った番号を、このTodoのidに保存する
-        this.title = title; // ★変更 受け取ったやることを、このTodoのtitleに保存する
-        this.done = false; // ★変更 作った直後は未完了にする
-    } // ★変更 作るときの処理はここまで
+    Todo(int id, String title) {
+        this.id = id;
+        this.title = title;
+        this.done = false;
+    }
 
-    int getId() { // ★変更 番号を読み出すメソッド（名前を付けた処理）
-        return id; // ★変更 保存してある番号を返す
-    } // ★変更 getIdの処理はここまで
+    int getId() {
+        return id;
+    }
 
-    String getTitle() { // ★変更 やることを読み出すメソッド（名前を付けた処理）
-        return title; // ★変更 保存してあるやることを返す
-    } // ★変更 getTitleの処理はここまで
+    String getTitle() {
+        return title;
+    }
 
-    boolean isDone() { // ★変更 完了したかを読み出すメソッド（名前を付けた処理）
-        return done; // ★変更 保存してある完了状態を返す
-    } // ★変更 isDoneの処理はここまで
+    boolean isDone() {
+        return done;
+    }
 
-    void setDone(boolean done) { // ★変更 完了状態を書き換えるメソッド（名前を付けた処理）
-        this.done = done; // ★変更 受け取った完了状態を、このTodoのdoneに保存する
-    } // ★変更 setDoneの処理はここまで
-} // ★変更 Todoクラスはここまで
+    void setDone(boolean done) {
+        this.done = done;
+    }
+}
